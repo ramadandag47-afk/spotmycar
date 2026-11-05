@@ -2,37 +2,43 @@
 
 **Status:** Technisches MVP / Ausgangsbasis, **nicht** produktionsreif. Keine echte Karte, kein Kennzeichen-Backend, keine Zahlungen. Die bestehende HTML-App wurde nicht überschrieben. Die GPS-Freigabe ist standardmäßig deaktiviert.
 
-## Voraussetzungen (Lenovo mit Windows 10/11)
+## Supabase ist eingerichtet
 
-1. Node.js LTS installieren: https://nodejs.org/
-2. Git installieren: https://git-scm.com/download/win
-3. Android Studio installieren: https://developer.android.com/studio – Android SDK, Emulator und Android SDK Platform-Tools einrichten. Alternativ ein echtes Android-Gerät mit USB-Debugging verwenden.
-4. Die ZIP entpacken und im PowerShell-Terminal **in den Ordner `spotmycar-app` wechseln** (dort liegt `package.json`), z. B. `cd $HOME\Downloads\spotmycar-app`. Dann:
+- Projekt **spotmycar** (Region Frankfurt, kostenloser Plan): https://wudoqocvzqzokfdigvoz.supabase.co
+- Alle drei Migrationen sind eingespielt (`001_radar`, `002_radar_status`, `003_konten`).
+- Die Datei `.env` ist schon ausgefüllt (Projekt-URL und öffentlicher Publishable Key). Diese Werte sind kein Geheimnis. Den `service_role`/Secret Key **niemals** in die App kopieren.
 
-```powershell
-npm install
-Copy-Item .env.example .env
-notepad .env
+### Einmal im Supabase-Dashboard einstellen (Authentication)
+
+1. **Sign In / Providers → Email:** Mindestlänge Passwort auf **10** setzen.
+2. **Emails → Templates → „Reset Password“:** in den Text `{{ .Token }}` einfügen, z. B. „Dein Code: {{ .Token }}“. Die App setzt Passwörter mit diesem 6-stelligen Code zurück.
+3. **URL Configuration → Site URL:** später die Webseite von Spot my car eintragen. Bis dahin funktioniert der Bestätigungslink trotzdem (das Konto wird bestätigt, danach erscheint nur eine leere Seite).
+4. Hinweis: Der eingebaute Mailversand von Supabase schickt nur wenige E-Mails pro Stunde. Für den Start einen eigenen SMTP-Dienst eintragen (Emails → SMTP Settings).
+
+### Dich zum Master-Admin machen
+
+Nach deiner Registrierung in der App im SQL Editor ausführen (E-Mail anpassen):
+
+```sql
+update public.profiles set role = 'admin' where id = (select id from auth.users where email = 'DEINE@E-MAIL.de');
 ```
 
-In `.env` die **Project URL** und den **Publishable Key** (oder Legacy `anon` Key) aus Supabase > Project Settings / API eintragen. **NIEMALS** den `service_role`/Secret Key in die App kopieren.
+## App starten (Lenovo mit Windows 10/11)
 
-5. Supabase > SQL Editor öffnen, zuerst `supabase/migrations/001_radar.sql`, danach `supabase/migrations/002_radar_status.sql` einfügen und jeweils ausführen. Vorher am besten in einem separaten Testprojekt prüfen. Unter Authentication > Providers > Email den E-Mail-Login aktivieren und ggf. Bestätigung konfigurieren.
-6. Für Android (Emulator oder angeschlossenes Gerät):
+1. Node.js LTS (https://nodejs.org/), Git (https://git-scm.com/download/win) und Android Studio (https://developer.android.com/studio) installieren. Alternativ ein Android-Handy mit USB-Debugging.
+2. ZIP entpacken, PowerShell öffnen, in den Ordner wechseln, z. B. `cd $HOME\Downloads\spotmycar-app`
+3. `npm install`
+4. Handy anschließen oder Emulator starten, dann `npx expo run:android`
 
-```powershell
-npx expo run:android
-```
+Expo Go reicht wegen GPS im Hintergrund nicht. Für iOS: Build über EAS Cloud (`npx eas-cli build --platform ios`), Apple-Entwicklerkonto nötig.
 
-Alternativ für einen installierbaren Development Build via EAS:
+## Bildschirme
 
-```powershell
-npx eas-cli login
-npx eas-cli build --platform android --profile development
-npx expo start --dev-client
-```
-
-**Expo Go ist für diese Hintergrundortung nicht ausreichend.** Für iOS kann ein Build auf Windows über EAS Cloud Build erstellt werden; iOS-Signierung/TestFlight erfordern Apple-Entwicklerzugang und die entsprechenden Apple-Vorgaben.
+- **Start:** Kennzeichensuche in drei Feldern (auch ohne Konto). Nur verifizierte, auffindbare Kennzeichen.
+- **Konto:** Registrieren (Benutzername, E-Mail, Passwort zweimal, 18+, AGB), Anmelden, Passwort vergessen mit Code per E-Mail.
+- **Profil:** Fahrzeug anlegen, Verifizierung beantragen, Benutzername/Instagram/Auffindbarkeit, Abmelden, Konto löschen. Master-Admin kann das eigene Kennzeichen direkt freigeben.
+- **Admin / Moderation:** offene Anträge bestätigen oder ablehnen; Master-Admin gibt jedes Kennzeichen auch ohne Fahrzeugschein frei. Alles wird protokolliert.
+- **Live-Radar:** wie bisher (GPS-Freigabe 30/60/120 Minuten, nur Gruppen ab 3 Personen).
 
 ## Was bereits im Code ist
 
@@ -92,11 +98,9 @@ Die Demo zeigt im Radar Kennzeichen und Fahrzeug einzelner Mitglieder. Dieses Gr
 
 ## Geprüft am 05.11.2026
 
+- Konten-Datenbank (`003_konten.sql`) lokal: 36 von 36 Prüfungen (Registrierung mit Benutzername/18+/AGB, keine direkten Tabellenzugriffe, kein Selbst-Admin, Kennzeichen nur einmal, Suche nur verifiziert und auffindbar, Moderator/Admin-Rechte, Freigabe ohne Fahrzeugschein, Sperre, Konto löschen).
+- Live im Supabase-Projekt: Registrierung → Profil → Fahrzeug → Antrag → Admin-Freigabe → Suche erfolgreich (Testdaten danach vollständig entfernt).
+
 - Datenbank (beide Migrationen in PostgreSQL 16 mit nachgebildeten Supabase-Rollen): 29 von 29 Prüfungen, u. a. kein Zugriff ohne Anmeldung, keine direkten Tabellenzugriffe, nur 30/60/120 Minuten, Gruppen erst ab 3, keine Nutzer-IDs oder genauen Koordinaten in der Antwort, Ablauf, Beenden, Löschen.
 - Geteilte Anmeldung im Gerätespeicher: 6 von 6 Prüfungen.
 - Noch NICHT geprüft: echter Build und Start auf Android/iOS (braucht `npm install` und ein Gerät), GPS im Hintergrund auf echten Handys.
-
-## Weitere Ordner in diesem Repository
-
-- `demo/spotmycar-demo.html` – Klick-Demo mit allen Funktionen und Texten (im Browser öffnen, läuft ohne Internet, Beispieldaten). Verbindliche Vorlage für Verhalten und Texte.
-- `daten/plz-deutschland.csv` – alle deutschen Postleitzahlen mit Ortsmitte (GeoNames, CC BY 4.0).
